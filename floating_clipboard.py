@@ -881,6 +881,10 @@ class ShortcutCell(tk.Label):
         self.long_press_timer = self.after(450, self.enable_move_mode)
 
     def enable_move_mode(self):
+        if self.released or not self.start:
+            return
+        if not (user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000):
+            return
         self.long_press_ready = True
         self.configure(bg=COLOR_HOLD, highlightbackground=COLOR_ACCENT_DARK)
 
@@ -915,6 +919,8 @@ class ShortcutCell(tk.Label):
         self.start = None
         self.dragging = False
         self.long_press_ready = False
+        if self.app.active_drag_cell is self:
+            self.app.active_drag_cell = None
 
     def finish_drag(self, x, y):
         if self.app.active_drag_cell is self:
@@ -924,6 +930,8 @@ class ShortcutCell(tk.Label):
             self.app.create_floating(self.item, x, y)
         else:
             self.app.reorder_item(self.index, x, y)
+        if self.app.active_drag_cell is self:
+            self.app.active_drag_cell = None
 
     def force_release_if_mouse_up(self):
         if not self.dragging or self.released:
@@ -972,15 +980,8 @@ class PopupMenu(tk.Toplevel):
             row.bind("<Button-1>", lambda _e, c=command: self.select(c))
         self.geometry(f"+{x}+{y}")
         self.after(0, lambda: apply_noactivate_topmost(self))
-        self.after(50, self.grab_set_global_safe)
         self.bind("<FocusOut>", lambda _e: self.destroy())
-
-    def grab_set_global_safe(self):
-        try:
-            self.grab_set_global()
-            self.bind("<ButtonRelease-1>", lambda _e: None)
-        except Exception:
-            pass
+        self.bind("<Escape>", lambda _e: self.destroy())
 
     def select(self, command):
         self.destroy()
