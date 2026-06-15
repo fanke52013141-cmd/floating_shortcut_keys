@@ -830,11 +830,13 @@ class ShortcutCell(tk.Label):
             padx=spx(10),
             pady=spx(6),
             wraplength=spx(300),
-            font=("Microsoft YaHei UI", font_size(10), "bold"),
+            font=("Microsoft YaHei UI", font_size(14), "bold"),
             cursor="hand2",
         )
         self.start = None
         self.dragging = False
+        self.long_press_ready = False
+        self.long_press_timer = None
         self.released = False
         self.bind("<Button-1>", self.on_press)
         self.bind("<B1-Motion>", self.on_motion)
@@ -872,30 +874,47 @@ class ShortcutCell(tk.Label):
     def on_press(self, event):
         self.start = (event.x_root, event.y_root)
         self.dragging = False
+        self.long_press_ready = False
         self.released = False
+        if self.long_press_timer:
+            self.after_cancel(self.long_press_timer)
+        self.long_press_timer = self.after(450, self.enable_move_mode)
+
+    def enable_move_mode(self):
+        self.long_press_ready = True
+        self.configure(bg=COLOR_HOLD, highlightbackground=COLOR_ACCENT_DARK)
 
     def on_motion(self, event):
         if not self.start or self.released:
             return
         dx = event.x_root - self.start[0]
         dy = event.y_root - self.start[1]
-        if not self.dragging and (abs(dx) + abs(dy)) > spx(12):
+        if self.long_press_ready and not self.dragging and (abs(dx) + abs(dy)) > spx(6):
             self.dragging = True
             self.app.active_drag_cell = self
             self.app.poll_drag_release()
             self.configure(bg=COLOR_HOLD)
+            self.app.preview_reorder(self.index, event.x_root, event.y_root)
+        elif self.dragging:
+            self.app.preview_reorder(self.index, event.x_root, event.y_root)
 
     def on_release(self, event):
+        if self.long_press_timer:
+            self.after_cancel(self.long_press_timer)
+            self.long_press_timer = None
         if self.released:
             return
         self.released = True
         if self.dragging:
             self.finish_drag(event.x_root, event.y_root)
-        else:
+        elif not self.long_press_ready:
             self.app.engine.execute(self.item)
             self.app.refresh_hold_states()
+        else:
+            self.refresh_visual()
         self.start = None
         self.dragging = False
+        self.long_press_ready = False
 
     def finish_drag(self, x, y):
         if self.app.active_drag_cell is self:
@@ -903,6 +922,8 @@ class ShortcutCell(tk.Label):
         self.refresh_visual()
         if not self.app.point_inside_main_window(x, y):
             self.app.create_floating(self.item, x, y)
+        else:
+            self.app.reorder_item(self.index, x, y)
 
     def force_release_if_mouse_up(self):
         if not self.dragging or self.released:
@@ -1184,6 +1205,43 @@ class FloatingClipboardApp:
             self.cells.append(cell)
         for col in range(2):
             self.grid_frame.grid_columnconfigure(col, weight=1, uniform="shortcut")
+
+    def index_from_point(self, x_root, y_root):
+        if not self.cells:
+            return 0
+        best_index = 0
+        best_distance = None
+        for i, cell in enumerate(self.cells):
+            cx = cell.winfo_rootx() + cell.winfo_width() / 2
+            cy = cell.winfo_rooty() + cell.winfo_height() / 2
+            distance = abs(x_root - cx) + abs(y_root - cy)
+            if best_distance is None or distance < best_distance:
+                best_distance = distance
+                best_index = i
+        return best_index
+
+    def preview_reorder(self, from_index, x_root, y_root):
+        target = self.index_from_point(x_root, y_root)
+        for i, cell in enumerate(self.cells):
+            if i == from_index:
+                cell.configure(bg=COLOR_HOLD, highlightbackground=COLOR_ACCENT_DARK)
+            elif i == target:
+                cell.configure(bg=COLOR_GREEN, highlightbackground=COLOR_ACCENT_DARK)
+            else:
+                cell.refresh_visual()
+
+    def reorder_item(self, from_index, x_root, y_root):
+        if not (0 <= from_index < len(self.store.items)):
+            return
+        to_index = self.index_from_point(x_root, y_root)
+        if to_index == from_index:
+            self.refresh_hold_states()
+            return
+        item = self.store.items.pop(from_index)
+        self.store.items.insert(to_index, item)
+        self.store.save()
+        self.refresh_grid()
+        self.set_status(f"已移动到第 {to_index + 1} 位")
 
     def collect_own_hwnds(self):
         hwnds = set()
