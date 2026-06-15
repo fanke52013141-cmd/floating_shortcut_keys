@@ -1,0 +1,22 @@
+[
+  {
+    "name": "您好",
+    "type": "text",
+    "content": "您好，请问有什么可以帮您？"
+  },
+  {
+    "name": "收到",
+    "type": "text",
+    "content": "收到，我稍后处理。"
+  },
+  {
+    "name": "谢谢",
+    "type": "text",
+    "content": "谢谢，辛苦了。"
+  },
+  {
+    "name": "截图",
+    "type": "shortcut",
+    "content": "ctrl+alt+a"
+  }
+]
