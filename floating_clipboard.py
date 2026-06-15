@@ -793,14 +793,17 @@ class FloatingButtonWindow(tk.Toplevel):
         self.label.configure(bg=COLOR_HOLD if self.app.engine.is_holding(self.item) else COLOR_PANEL)
 
     def show_menu(self, event):
-        menu = tk.Menu(self, tearoff=0, bg=COLOR_PANEL, fg=COLOR_BLACK, activebackground=COLOR_ACCENT)
-        size_menu = tk.Menu(menu, tearoff=0, bg=COLOR_PANEL, fg=COLOR_BLACK, activebackground=COLOR_ACCENT)
-        size_menu.add_command(label="小 (150px)", command=lambda: self.apply_width(150))
-        size_menu.add_command(label="中 (220px)", command=lambda: self.apply_width(220))
-        size_menu.add_command(label="大 (320px)", command=lambda: self.apply_width(320))
-        menu.add_cascade(label="调整按钮大小", menu=size_menu)
-        menu.add_command(label="收回", command=self.destroy)
-        menu.tk_popup(event.x_root, event.y_root)
+        PopupMenu(
+            self,
+            [
+                ("小尺寸 150px", lambda: self.apply_width(150)),
+                ("中尺寸 220px", lambda: self.apply_width(220)),
+                ("大尺寸 320px", lambda: self.apply_width(320)),
+                ("收回悬浮按钮", self.destroy),
+            ],
+            event.x_root,
+            event.y_root,
+        )
 
     def destroy(self):
         self.app.unregister_floating(self.item, self)
@@ -911,10 +914,56 @@ class ShortcutCell(tk.Label):
         self.on_release(type("Event", (), {"x_root": pos.x, "y_root": pos.y})())
 
     def show_menu(self, event):
-        menu = tk.Menu(self, tearoff=0, bg=COLOR_PANEL, fg=COLOR_BLACK, activebackground=COLOR_ACCENT)
-        menu.add_command(label="编辑该快捷项", command=lambda: self.app.open_edit(self.index))
-        menu.add_command(label="删除该快捷项", command=lambda: self.app.delete_item(self.index))
-        menu.tk_popup(event.x_root, event.y_root)
+        PopupMenu(
+            self,
+            [
+                ("编辑快捷项", lambda: self.app.open_edit(self.index)),
+                ("删除快捷项", lambda: self.app.delete_item(self.index)),
+            ],
+            event.x_root,
+            event.y_root,
+        )
+
+
+class PopupMenu(tk.Toplevel):
+    def __init__(self, parent, items, x, y):
+        super().__init__(parent)
+        self.overrideredirect(True)
+        self.configure(bg=COLOR_BORDER)
+        self.transient(parent)
+        frame = tk.Frame(self, bg=COLOR_PANEL, padx=spx(4), pady=spx(4))
+        frame.pack(fill="both", expand=True, padx=spx(1), pady=spx(1))
+        for label, command in items:
+            row = tk.Label(
+                frame,
+                text=label,
+                bg=COLOR_PANEL,
+                fg=COLOR_BLACK,
+                anchor="w",
+                padx=spx(18),
+                pady=spx(10),
+                font=("Microsoft YaHei UI", font_size(11), "bold"),
+                cursor="hand2",
+            )
+            row.pack(fill="x")
+            row.bind("<Enter>", lambda _e, w=row: w.configure(bg=COLOR_ACCENT))
+            row.bind("<Leave>", lambda _e, w=row: w.configure(bg=COLOR_PANEL))
+            row.bind("<Button-1>", lambda _e, c=command: self.select(c))
+        self.geometry(f"+{x}+{y}")
+        self.after(0, lambda: apply_noactivate_topmost(self))
+        self.after(50, self.grab_set_global_safe)
+        self.bind("<FocusOut>", lambda _e: self.destroy())
+
+    def grab_set_global_safe(self):
+        try:
+            self.grab_set_global()
+            self.bind("<ButtonRelease-1>", lambda _e: None)
+        except Exception:
+            pass
+
+    def select(self, command):
+        self.destroy()
+        command()
 
 
 class FloatingClipboardApp:
@@ -1062,12 +1111,13 @@ class FloatingClipboardApp:
         self.circle_window.geometry(f"{size}x{size}+{x}+{y}")
         canvas = tk.Canvas(self.circle_window, width=size, height=size, highlightthickness=0, bg=COLOR_BG)
         canvas.pack(fill="both", expand=True)
-        canvas.create_oval(spx(3), spx(5), size - spx(3), size - spx(1), fill="#D8E6FF", outline="", width=0)
-        canvas.create_oval(spx(4), spx(3), size - spx(4), size - spx(5), fill="#1E293B", outline="#0F172A", width=spx(2))
-        canvas.create_rectangle(spx(24), spx(23), spx(54), spx(58), fill="#F8FAFC", outline="#93C5FD", width=spx(2))
-        canvas.create_rectangle(spx(31), spx(15), spx(47), spx(26), fill="#38BDF8", outline="#F8FAFC", width=spx(2))
-        canvas.create_line(spx(31), spx(36), spx(47), spx(36), fill="#1E293B", width=spx(2))
-        canvas.create_line(spx(31), spx(45), spx(43), spx(45), fill="#1E293B", width=spx(2))
+        canvas.create_oval(spx(4), spx(6), size - spx(4), size - spx(2), fill="#C7D2FE", outline="", width=0)
+        canvas.create_oval(spx(4), spx(3), size - spx(4), size - spx(5), fill="#F8FAFC", outline="#60A5FA", width=spx(3))
+        canvas.create_rectangle(spx(22), spx(25), spx(56), spx(57), fill="#DBEAFE", outline="#2563EB", width=spx(2))
+        canvas.create_rectangle(spx(30), spx(18), spx(48), spx(29), fill="#2563EB", outline="#2563EB", width=spx(2))
+        canvas.create_line(spx(30), spx(38), spx(48), spx(38), fill="#1D4ED8", width=spx(2))
+        canvas.create_line(spx(30), spx(47), spx(43), spx(47), fill="#1D4ED8", width=spx(2))
+        canvas.create_oval(spx(34), spx(8), spx(44), spx(18), fill="#93C5FD", outline="", width=0)
         self.circle_drag = None
         for widget in (self.circle_window, canvas):
             widget.bind("<Button-1>", self.start_circle_drag)
