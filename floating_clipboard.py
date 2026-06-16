@@ -709,8 +709,10 @@ class FloatingButtonWindow(tk.Toplevel):
         self.configure(bg=COLOR_BLACK)
         self.build()
         self.geometry(f"+{x}+{y}")
-        self.after(0, lambda: apply_noactivate_topmost(self))
-        self.after(1500, self.topmost_tick)
+        self.after(0, self.force_front)
+        self.after(80, self.force_front)
+        self.after(200, self.force_front)
+        self.after(500, self.topmost_tick)
 
     def build(self):
         self.frame = tk.Frame(self, bg=COLOR_PANEL, highlightthickness=spx(1), highlightbackground=COLOR_BORDER)
@@ -754,8 +756,19 @@ class FloatingButtonWindow(tk.Toplevel):
 
     def topmost_tick(self):
         if self.winfo_exists():
+            self.force_front()
+            self.after(500, self.topmost_tick)
+
+    def force_front(self):
+        if not self.winfo_exists():
+            return
+        try:
+            self.attributes("-topmost", True)
+            self.lift()
+            apply_noactivate_topmost(self)
             keep_topmost(self)
-            self.after(1500, self.topmost_tick)
+        except Exception:
+            pass
 
     def apply_width(self, width):
         self.width = max(80, min(500, int(width)))
@@ -979,9 +992,23 @@ class PopupMenu(tk.Toplevel):
             row.bind("<Leave>", lambda _e, w=row: w.configure(bg=COLOR_PANEL))
             row.bind("<Button-1>", lambda _e, c=command: self.select(c))
         self.geometry(f"+{x}+{y}")
-        self.after(0, lambda: apply_noactivate_topmost(self))
+        self.after(0, self.raise_above_parent)
+        self.after(80, self.raise_above_parent)
+        self.after(200, self.raise_above_parent)
+        self.after(15000, self.destroy)
         self.bind("<FocusOut>", lambda _e: self.destroy())
         self.bind("<Escape>", lambda _e: self.destroy())
+
+    def raise_above_parent(self):
+        if not self.winfo_exists():
+            return
+        try:
+            self.attributes("-topmost", True)
+            self.lift()
+            apply_noactivate_topmost(self)
+            keep_topmost(self)
+        except Exception:
+            pass
 
     def select(self, command):
         self.destroy()
